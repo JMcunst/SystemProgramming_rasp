@@ -368,55 +368,17 @@ int main(){
 			printf("<<<<<<<<fl_distance = %.2lfcm\n",fl_distance);
 			printf("vl_drone_speed : %.2lf \n", vl_drone_speed);
 			customRefreshQueue(L_FLAG);
+			if(rdistance < 50){
+				power[1] = 2;
+			}else if(rdistance < 30){
+				power[1] = 1;
+			}else{
+				power[1] = 0;	
+			}
 		}
 
-		if(fr_distance < 1000.0){
-			frdFullCount++;
-		}else{
-			frdFullCount = 0;
-			frdSum = 0;
-			frdCount = 0;
-		}
-		if(frdFullCount >= FDFULLCOUNT){				// Excute 'Collision Avoidance'
-			frdCount++;
-			frdFullCount++;
-			frdSum += fr_distance;
-			if(frdCount == FDCOUNT){
-				frdValue = frdSum / FDCOUNT; 
-				frdCount = 0;
-			}
-		}else{								// Don't excute 'Collision Avoidance' - Normal Condition
-			//printf("not working Collision! now distance : %.2lfcm\n", fr_distance);
-			usleep(50000);
-		}
-		if(fl_distance < 1000.0){
-			fldFullCount++;
-		}else{
-			fldFullCount = 0;
-		}
-		if(fl_distance < 1000.0){				// Excute 'Collision Avoidance'
-			fldCount++;
-			fldFullCount++;
-			fldSum += fl_distance;
-			if(fldCount == FDCOUNT){
-				fldValue = fldSum / FDCOUNT; 
-				fldCount = 0;
-			}
-		}else{								// Don't excute 'Collision Avoidance' - Normal Condition
-			//printf("not working Collision! now distance : %.2lfcm\n", fl_distance);
-			usleep(50000);
-		}
-
-		//Velocity
-		vr_pre_dist = vr_now_dist;
-		vr_now_dist = fr_distance;
-		vr_drone_speed = vr_pre_dist - vr_now_dist; // 양수면 충돌하는중, 음수면 멀어지는 중
-		//printf("vr_drone_speed : %.2lf \n", vr_drone_speed);
-		vl_pre_dist = vl_now_dist;
-		vl_now_dist = fl_distance;
-		vl_drone_speed = vl_pre_dist - vl_now_dist; // 양수면 충돌하는중, 음수면 멀어지는 중
-		//printf("vl_drone_speed : %.2lf \n", vl_drone_speed);
 		
+		}
     }
 }
 

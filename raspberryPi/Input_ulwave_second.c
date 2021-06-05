@@ -4,35 +4,34 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include <time.h>
-#include <math.h>
-
-#define IN 0
-#define OUT 1
-#define LOW 0
-#define HIGH 1
+#include <pthread.h>
+#include <string.h>
 
 #define BUFFER_MAX 45
 #define DIRECTION_MAX 45
 #define VALUE_MAX 256
 #define QUEUE_MAX 10
 
+#define IN 0
+#define OUT 1
+#define LOW 0
+#define HIGH   1
+
 #define POUT_R_TRIG    23
 #define PIN_R_ECHO     24
 
 #define R_FLAG 1
+#define L_FLAG 2
 #define FDCOUNT 3
 #define FDFULLCOUNT 5
 
+double fr_distance;
 double vr_drone_speed = 0;	
 double vr_now_dist = 0;
 double vr_pre_dist = 0;
 
 double qr_array[QUEUE_MAX] = {0,};
-double fr_distance;
 
 int rrear = -1;
 int rfront = -1;
@@ -40,12 +39,15 @@ int isRQFull = 0; // false
 
 int frdCount = 0;
 int frdFullCount = 0;
+
 double frdSum = 0;
 double frdValue = 0;
 
 double rmin = 0;
 double rmax = 0;
+
 double r_min_to_max = 0;
+
 int rminmaxCount = 0;
 
 int isRFirst = 0;
@@ -53,16 +55,9 @@ int isRFirst = 0;
 int power = 0;
 
 void customBubbleSort(double arr[]);
-void customMinMax(double qDist);
-void customInsertQueue(double qDist);
-void customRefreshQueue();
-
-void error_handling(char *message)
-{
-    fputs(message, stderr);
-    fputc('\n', stderr);
-    exit(1);
-}
+void customMinMax(double qDist, int qLR);
+void customInsertQueue(double qDist, int qLR);
+void customRefreshQueue(int qLR);
 
 void customBubbleSort(double arr[])    // 매개변수로 정렬할 배열과 요소의 개수를 받음
 {
@@ -81,58 +76,45 @@ void customBubbleSort(double arr[])    // 매개변수로 정렬할 배열과 �
         }
     }
 }
-void customMinMax(double qDist)
-{
-    if (rmin > qDist)
-    {
-        rmin = qDist;
-    }
-    else if (rmax < qDist)
-    {
-        rmax = qDist;
-    }
-    r_min_to_max = rmax - rmin;
-    rminmaxCount++;
-    printf("--------------------------\n");
-    printf("r_min_to_max : %.3lf, count: %d\n", r_min_to_max, rminmaxCount);
+void customMinMax(double qDist){
+		if(rmin > qDist){
+			rmin = qDist;
+		}else if(rmax < qDist ){
+			rmax = qDist;
+		}
+		r_min_to_max = rmax - rmin;
+		rminmaxCount++;
+		printf("--------------------------\n");
+		printf("r_min_to_max : %.3lf, count: %d\n",r_min_to_max, rminmaxCount);
+	
 }
-void customInsertQueue(double qDist)
+void customInsertQueue(double qDist, int qLR)
 {
-    if (rrear == QUEUE_MAX - 1)
-    { //Right Queue is Full
-        printf("Right Queue is Full. isRQFull = 1 \n");
-        printf("step3\n");
-        fr_distance = qr_array[5];
 
-        if (fr_distance < 500){
-            power = 2;
-        }else if (fr_distance < 300)
-        {
-            power = 1;
-        }else{
-            power = 0;
-        }
-        usleep(50000);
-        customRefreshQueue();
-        printf("step4\n");
-        rfront = 0;
-        rrear = 0;
-        qr_array[rrear] = qDist;
-    }
-    else
-    {
-        if (rfront == -1)
-            rfront = 0;
-        printf("Inset the element in Right Queue : %.2lfcm\n ",qDist);
-        rrear = rrear + 1;
-        qr_array[rrear] = qDist;
-    }
+		if (rrear == QUEUE_MAX - 1)
+		{ //Right Queue is Full
+			//printf("Right Queue is Full. isRQFull = 1 \n");
+			isRQFull = 1; // true
+
+			rfront = 0;
+			rrear = 0;
+			qr_array[rrear] = qDist;
+		}
+		else
+		{
+			if (rfront == -1)
+				rfront = 0;
+			//printf("Inset the element in Right Queue : %.2lfcm\n ",qDist);
+			rrear = rrear + 1;
+			qr_array[rrear] = qDist;
+		}
 }
 
-void customRefreshQueue()
-{
+void customRefreshQueue(int qLR){
+
     memset(qr_array, 0.0, QUEUE_MAX * sizeof(double));
-    isRQFull = 0;
+	isRQFull = 0;
+	
 }
 
 static int GPIOUnexport(int pin){
@@ -238,19 +220,48 @@ static int GPIORead(int pin){
 
     return(atoi(value_str));
 }
-int main(int argc, char *argv[])
-{
-    if(-1==GPIOUnexport(POUT_R_TRIG)||-1== GPIOUnexport(PIN_R_ECHO)){
-        return -1;
-    }
-    clock_t rstart_t,rend_t;
-    double rdistance;
 
+void *right_ulwave(){
+	clock_t rstart_t,rend_t;
+	double rdistance;
 	double rtime;
 
-    int sock;
-    struct sockaddr_in serv_addr;
-    char msg[4];
+	while(1){
+        if(-1==GPIOWrite(POUT_R_TRIG,1)){
+            printf("gpio write/trigger err\n");
+            exit(0);
+        }
+
+        usleep(100);
+        GPIOWrite(POUT_R_TRIG,0);
+
+        while(GPIORead(PIN_R_ECHO)==0){
+            rstart_t=clock();
+        }
+        while(GPIORead(PIN_R_ECHO)==1){
+            rend_t=clock();
+        }
+
+        rtime=(double)(rend_t-rstart_t)/CLOCKS_PER_SEC;
+        rdistance=rtime/2*34000;
+        
+		if(rdistance < 50){
+			power[1] = 2;
+		}else if(rdistance < 30){
+			power[1] = 1;
+		}else{
+			power[1] = 0;	
+		}
+        printf("rtime: %.4lf\n",rtime);
+        printf("rdistance: %.2lfcm\n",rdistance);
+        usleep(50000);
+    }
+
+}
+int main(){
+	if(-1==GPIOUnexport(POUT_R_TRIG)|| -1== GPIOUnexport(PIN_R_ECHO)){
+        return -1;
+    }
 
 	if(-1==GPIOExport(POUT_R_TRIG)||-1==GPIOExport(PIN_R_ECHO)){
         printf("gpio export err ultra\n");
@@ -265,85 +276,47 @@ int main(int argc, char *argv[])
     }
 
     GPIOWrite(POUT_R_TRIG,0);
-    usleep(10000);
+	usleep(20000)
 
-    if (argc != 3)
-    {
-        printf("Usage : %s <IP> <port>\n", argv[0]);
-        exit(1);
-    }
-
-    sock = socket(PF_INET, SOCK_STREAM, 0);
-    if (sock == -1)
-        error_handling("socket() error");
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
-    serv_addr.sin_port = htons(atoi(argv[2]));
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1)
-        error_handling("connect() error");
-    while (1)
-    {
-        int i=0;
-        int j=0;
+    while(1){
         if(-1==GPIOWrite(POUT_R_TRIG,1)){
             printf("gpio write/trigger err\n");
             exit(0);
         }
+
         usleep(100);
         GPIOWrite(POUT_R_TRIG,0);
-        printf("--------------------------\n");
 
         while(GPIORead(PIN_R_ECHO)==0){
             rstart_t=clock();
-            if(i++>100){
-                break;
-            }
         }
-        printf("step1\n");
         while(GPIORead(PIN_R_ECHO)==1){
             rend_t=clock();
-            if(j++>100){
-                break;
-            } 
         }
-        printf("step2\n");
-        printf("end : %.4lf \n start : %.4lf\n", rend_t, rstart_t);
 
-        rtime=(double)fabs(rend_t-rstart_t)/CLOCKS_PER_SEC;
+        rtime=(double)(rend_t-rstart_t)/CLOCKS_PER_SEC;
         rdistance=rtime/2*34000;
-
-        if(rdistance > 900){
-            rdistance = 900;
-        }
-        if (rdistance < 0)
-        {
-            rdistance = 0;
-        }
-
-        if (rdistance < 500){
-            power = 2;
-        }else if (rdistance < 300){
-            power = 1;
-        }else{
-            power = 0;
-        }
-    
-        // customInsertQueue(rdistance);
-        printf("step5\n");
-
+        
+		if(rdistance < 50){
+			power[1] = 2;
+		}else if(rdistance < 30){
+			power[1] = 1;
+		}else{
+			power[1] = 0;	
+		}
         printf("rtime: %.4lf\n",rtime);
-        //printf("rdistance: %.2lfcm\n",fr_distance);
+        printf("rdistance: %.2lfcm\n",rdistance);
         usleep(50000);
-
-        snprintf(msg, sizeof(msg), "m%d%d", power, power);
-        write(sock, msg, sizeof(msg));
-        printf("msg = %s\n",msg);
-        usleep(10000);
-        printf("step6\n");
     }
-    close(sock);
-    //Disable GPIO pins
-    
-    return (0);
+
+	if(status=pthread_cancel(p_thread[0])!=0){
+        perror("thread can't cancel:");
+        exit(0);
+    }
+    if(status=pthread_cancel(p_thread[1])!=0){
+        perror("thread can't cancel:");
+        exit(0);
+    }
 }
+
+//sys/class/gpio
