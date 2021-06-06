@@ -245,7 +245,6 @@ int main(int argc, char *argv[])
     }
     clock_t rstart_t,rend_t;
     double rdistance;
-
 	double rtime;
 
     int sock;
