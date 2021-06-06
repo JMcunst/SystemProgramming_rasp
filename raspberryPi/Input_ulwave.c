@@ -270,7 +270,7 @@ static int GPIORead(int pin){
 }
 
 int main(){
-	if(-1==GPIOUnexport(POUT_L_TRIG)||-1==GPIOUnexport(POUT_R_TRIG)||-1==GPIOUnexport(PIN_L_ECHO) || GPIOUnexport(PIN_R_ECHO)){
+	if(-1==GPIOUnexport(POUT_L_TRIG)||-1==GPIOUnexport(POUT_R_TRIG)||-1==GPIOUnexport(PIN_L_ECHO) || -1==GPIOUnexport(PIN_R_ECHO)){
         return -1;
     }
     clock_t rstart_t,rend_t;
@@ -418,6 +418,12 @@ int main(){
 		//printf("vl_drone_speed : %.2lf \n", vl_drone_speed);
 		
     }
+
+	if(-1==GPIOUnexport(POUT_L_TRIG)||-1==GPIOUnexport(POUT_R_TRIG)||-1==GPIOUnexport(PIN_L_ECHO) || -1==GPIOUnexport(PIN_R_ECHO)){
+        return -1;
+    }
+
+	return 0;
 }
 
 //sys/class/gpio
