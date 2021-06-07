@@ -39,6 +39,13 @@ int lfront = -1;
 double mr_distance = 0.0;
 double ml_distance = 0.0;
 
+double vnl_distance = 0;
+double vpl_distance = 0;
+double lspeed = 0;
+double vnr_distance = 0;
+double vpr_distance = 0;
+double rspeed = 0;
+
 void error_handling(char *message)
 {
     fputs(message, stderr);
@@ -356,18 +363,33 @@ int main(int argc, char *argv[]){
         }
 
         printf("ml_distance : %f, ",ml_distance);
+        vnl_distance = vpl_distance;
+        vpl_distance = ml_distance;
+        lspeed = vpl_distance - vnl_distance;
         if(ml_distance < 40 && ml_distance > 10){
             lpower = 2;
         }else if(ml_distance < 100 && ml_distance > 10){
             lpower = 1;
+            if(lspeed > 20 && first_speed != 1){
+                lpower = 2;
+                printf("Left speed power on.\n");
+            }
         }else{
             lpower = 0;
         }
-        printf("mr_distance : %f \n ",mr_distance);
+        
+        printf("mr_distance : %f\n",mr_distance);
+        vnr_distance = vpr_distance;
+        vpr_distance = mr_distance;
+        rspeed = vpr_distance - vnr_distance;
         if(mr_distance < 40 && mr_distance > 10){
             rpower = 2;
-        }else if(mr_distance < 100 && mr_distance > 10){
+        }else if(mr_distance < 120 && mr_distance > 10){
             rpower = 1;
+            if(rspeed > 20 && first_speed != 1){
+                rpower = 2;
+                printf("Right speed power on.\n");
+            }
         }else{
             rpower = 0;
         }
@@ -381,6 +403,10 @@ int main(int argc, char *argv[]){
             printf("rpower : %d \n ,",rpower);
         }else{
             printf("rpower : no change!! \n");
+        }
+        
+        if(first_speed == 1){
+            first_speed++;
         }
         
         usleep(90000);

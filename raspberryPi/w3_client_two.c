@@ -387,7 +387,7 @@ int main(int argc, char *argv[]){
         snprintf(msg, sizeof(msg), "m%d%d", lpower, rpower);
         write(sock, msg, sizeof(msg));
         printf("msg = %s\n",msg);
-        printf("-----------------------------------\n");
+        printf("-----------s------------------------\n");
         usleep(200000);
     }
 
