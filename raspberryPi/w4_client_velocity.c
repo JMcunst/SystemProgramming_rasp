@@ -9,7 +9,6 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <math.h>
-#include <pthread.h>
 
 #define BUFFER_MAX 45
 #define DIRECTION_MAX 45
@@ -21,13 +20,15 @@
 #define LOW 0
 #define HIGH   1
 
-#define POUT_R_TRIG    8
-#define PIN_R_ECHO     7
-#define POUT_L_TRIG    23
-#define PIN_L_ECHO     24
+#define POUT_R_TRIG    23
+#define PIN_R_ECHO     24
+#define POUT_L_TRIG    8
+#define PIN_L_ECHO     7
 
 #define FLAG_R 1
 #define FLAG_L 2
+#define MAXESCOUNT 80
+#define MAXEECOUNT 81
 
 double qr_array[QUEUE_MAX] = {0,};
 double ql_array[QUEUE_MAX] = {0,};
@@ -37,8 +38,6 @@ int lrear = -1;
 int lfront = -1;
 double mr_distance = 0.0;
 double ml_distance = 0.0;
-int glpower;
-int grpower;
 
 void error_handling(char *message)
 {
@@ -65,86 +64,86 @@ void customBubbleSort(double arr[])    // 매개변수로 정렬할 배열과 �
     }
 }
 static int GPIOUnexport(int pin){
-   char buffer[BUFFER_MAX];
-   ssize_t bytes_written;
-   int fd;
-   
-   fd=open("/sys/class/gpio/unexport",O_WRONLY);
-   if(-1==fd){
-      fprintf(stderr,"falied to pen unexport\n");
-      return -1;
-   }
-   
-   bytes_written=snprintf(buffer,BUFFER_MAX,"%d",pin);
-   write(fd,buffer,bytes_written);
-   close(fd);
-   return 0;
+	char buffer[BUFFER_MAX];
+	ssize_t bytes_written;
+	int fd;
+	
+	fd=open("/sys/class/gpio/unexport",O_WRONLY);
+	if(-1==fd){
+		fprintf(stderr,"falied to pen unexport\n");
+		return -1;
+	}
+	
+	bytes_written=snprintf(buffer,BUFFER_MAX,"%d",pin);
+	write(fd,buffer,bytes_written);
+	close(fd);
+	return 0;
 }
 
 static int GPIODirection(int pin,int dir){
-      static const char s_directions_str[]="in\0out";
-      
-   
-   char path[DIRECTION_MAX]="/sys/class/gpio/gpio%d/direction";
-   int fd;
-   
-   snprintf(path, DIRECTION_MAX, "/sys/class/gpio/gpio%d/direction",pin);
-   
-   fd=open(path,O_WRONLY);
-   if(-1==fd){
-      fprintf(stderr,"Failed to open gpio direction for writing!\n");
-      return -1;
-   }
-   
-   if(-1==write(fd,&s_directions_str[IN == dir ? 0 :3], IN==dir ? 2:3)){
-      fprintf(stderr,"failed to set direction!\n");
-      return -1;
-   }
-   
-   close(fd);
-   return 0;
+		static const char s_directions_str[]="in\0out";
+		
+	
+	char path[DIRECTION_MAX]="/sys/class/gpio/gpio%d/direction";
+	int fd;
+	
+	snprintf(path, DIRECTION_MAX, "/sys/class/gpio/gpio%d/direction",pin);
+	
+	fd=open(path,O_WRONLY);
+	if(-1==fd){
+		fprintf(stderr,"Failed to open gpio direction for writing!\n");
+		return -1;
+	}
+	
+	if(-1==write(fd,&s_directions_str[IN == dir ? 0 :3], IN==dir ? 2:3)){
+		fprintf(stderr,"failed to set direction!\n");
+		return -1;
+	}
+	
+	close(fd);
+	return 0;
 }
 
 static int GPIOExport(int pin){
 
-   char buffer[BUFFER_MAX];
-   ssize_t bytes_written;
-   int fd;
-   
-   fd=open("/sys/class/gpio/export",O_WRONLY);
-   if(-1==fd){
-      fprintf(stderr, "failed export wr");
-      return 1;
-   }
-   bytes_written=snprintf(buffer,BUFFER_MAX, "%d", pin);
-   write(fd,buffer,bytes_written);
-   close(fd);
-   return 0;
+	char buffer[BUFFER_MAX];
+	ssize_t bytes_written;
+	int fd;
+	
+	fd=open("/sys/class/gpio/export",O_WRONLY);
+	if(-1==fd){
+		fprintf(stderr, "failed export wr");
+		return 1;
+	}
+	bytes_written=snprintf(buffer,BUFFER_MAX, "%d", pin);
+	write(fd,buffer,bytes_written);
+	close(fd);
+	return 0;
 }
 
 
 static int GPIOWrite(int pin, int value){
-      static const char s_values_str[] ="01";
-      
-      char path[VALUE_MAX];
-      int fd;
-      
-      //printf("write value!\n");
-      
-      snprintf(path,VALUE_MAX, "/sys/class/gpio/gpio%d/value",pin);
-      fd=open(path,O_WRONLY);
-      if(-1==fd){
-         fprintf(stderr,"failed open gpio write\n");
-         return -1;
-      }
-      
-      //0 1 selection
-      if(1!=write(fd,&s_values_str[LOW==value ? 0:1],1)){
-         fprintf(stderr,"failed to write value\n");
-         return -1;
-      }
-      close(fd);
-      return 0;
+		static const char s_values_str[] ="01";
+		
+		char path[VALUE_MAX];
+		int fd;
+		
+		//printf("write value!\n");
+		
+		snprintf(path,VALUE_MAX, "/sys/class/gpio/gpio%d/value",pin);
+		fd=open(path,O_WRONLY);
+		if(-1==fd){
+			fprintf(stderr,"failed open gpio write\n");
+			return -1;
+		}
+		
+		//0 1 selection
+		if(1!=write(fd,&s_values_str[LOW==value ? 0:1],1)){
+			fprintf(stderr,"failed to write value\n");
+			return -1;
+		}
+		close(fd);
+		return 0;
 }
 static int GPIORead(int pin){
     char path[VALUE_MAX];
@@ -169,8 +168,8 @@ static int GPIORead(int pin){
 void customInsertQueue(double qDist, int qLR)
 {
     if(qLR == FLAG_R){
-        if (rrear == QUEUE_MAX - 1){ // Right Queue is Full
-            printf("Right Queue is Full.\n");
+        if (rrear == QUEUE_MAX - 1){ // Queue is Full
+            //printf("Right Queue is Full \n ");
 
             // Bubble Sort
             int temp;
@@ -202,8 +201,8 @@ void customInsertQueue(double qDist, int qLR)
             qr_array[rrear] = qDist;
         }
     }else{  // Left Sensor
-        if (lrear == QUEUE_MAX - 1){ // Left Queue is Full
-            printf("Left Queue is Full.\n");
+        if (lrear == QUEUE_MAX - 1){ // Queue is Full
+            //printf("Left Queue is Full , ");
 
             // Bubble Sort
             int temp;
@@ -236,124 +235,22 @@ void customInsertQueue(double qDist, int qLR)
         }
     }
 }
-void *ult1(){
-    clock_t rstart_t,rend_t;
-    double rtime;
-    double rdistance;
-
-    int rpower;
-   while(1){
-       printf("step0\n");
-
-        if(-1==GPIOWrite(POUT_R_TRIG,1)){
-            printf("gpio Right write/trigger err\n");
-            exit(0);
-        }
-        printf("step1\n");
-        usleep(10);
-        GPIOWrite(POUT_R_TRIG,0);
-        usleep(10);
-        printf("step2\n");
-        //printf("------------------------------------\n");
-        while(GPIORead(PIN_R_ECHO) == 0){
-            rstart_t=clock();
-        }
-        printf("step3\n");
-        while(GPIORead(PIN_R_ECHO) == 1){
-            rend_t=clock();
-        }
-        printf("step4\n");
-        rtime = (double)(rend_t-rstart_t)/CLOCKS_PER_SEC;
-        rdistance = rtime/2*34000;
-        customInsertQueue(rdistance, FLAG_R);
-        printf("mr_distance : %f\n",mr_distance);
-        if(mr_distance <= 10){
-            continue;
-        }
-        //printf("mr_distance : %f\n",mr_distance);
-        if(mr_distance < 40 && mr_distance > 10){
-            rpower = 2;
-        }else if(mr_distance < 100 && mr_distance > 10){
-            rpower = 1;
-        }else{
-            rpower = 0;
-        }
-        if(rpower != 0){
-            printf("rpower : %d\n",rpower);
-        }else{
-            printf("rpower : no change!! \n");
-        }
-      grpower=rpower;
-
-      usleep(60*1000);
-   }
-
-   
-  
-}
-void *ult2(){
-    clock_t lstart_t,lend_t;
-    double ltime;
-    double ldistance;
-
-    int lpower;
-while(1){
- printf("step5\n");
-        usleep(10);
-        if(-1==GPIOWrite(POUT_L_TRIG,1)){
-            printf("gpio Right write/trigger err\n");
-            exit(0);
-        }
-        printf("step6\n");
-        usleep(10);
-        GPIOWrite(POUT_L_TRIG,0);
-        usleep(10);
-        printf("step7\n");
-        while(GPIORead(PIN_L_ECHO) == 0){
-            lstart_t=clock();
-        }
-        printf("step8\n");
-        while(GPIORead(PIN_L_ECHO) == 1){
-            lend_t=clock();
-        }
-        printf("step9\n");
-
-        ltime = (double)(lend_t-lstart_t)/CLOCKS_PER_SEC;
-        ldistance = ltime/2*34000;
-        customInsertQueue(ldistance, FLAG_L);
-        printf("ml_distance : %f\n",ml_distance);
-        if(ml_distance <= 10){
-            continue;
-        }
-        if(ml_distance < 40 && ml_distance > 10){
-            lpower = 2;
-        }else if(ml_distance < 100 && ml_distance > 10){
-            lpower = 1;
-        }else{
-            lpower = 0;
-        }
-        if(lpower != 0){
-            printf("lpower : %d\n",lpower);
-        }else{
-            printf("lpower : no change!! \n");
-        }
-        glpower=lpower;
-
-        usleep(300*1000);
-}
-       
-}
 int main(int argc, char *argv[]){
     int sock;
     struct sockaddr_in serv_addr;
     char msg[6];
 
-    pthread_t p_thread[2];
-    int thr_id;
-    int status;
+    clock_t rstart_t,rend_t;
+    clock_t lstart_t,lend_t;
+    double rtime;
+    double rdistance;
+    double ltime;
+    double ldistance;
 
-    char p1[] = "thread_1";
-    char p2[] = "thread_2";
+    int rpower;
+    int lpower;
+
+    int power;
 
     if (argc != 3)
     {
@@ -390,24 +287,108 @@ int main(int argc, char *argv[]){
     GPIOWrite(POUT_L_TRIG,0);
     usleep(10000);
 
-      thr_id = pthread_create(&p_thread[2], NULL, ult1, NULL);
-    if(thr_id < 0){
-        perror("thread create error : ");
-        exit(0);
-        usleep(1000);
-    }
- thr_id = pthread_create(&p_thread[2], NULL, ult2, NULL);
-    if(thr_id < 0){
-        perror("thread create error : ");
-        exit(0);
-        usleep(1000);
-    }
     while(1){
+        int es_count = 0;
+        // Right Clock 
+        if(-1==GPIOWrite(POUT_R_TRIG,1)){
+            printf("gpio Right write/trigger err\n");
+            exit(0);
+        }
+        usleep(10);
+        GPIOWrite(POUT_R_TRIG,0);
+        while(GPIORead(PIN_R_ECHO) == 0){
+            es_count++;
+            if(es_count > MAXESCOUNT){
+                es_count = MAXEECOUNT;
+                break;
+            }
+            rstart_t=clock();
+        }
+        while(GPIORead(PIN_R_ECHO) == 1){
+            if(es_count == MAXEECOUNT){
+                es_count = 0;
+                break;
+            }
+            rend_t=clock();
+        }
+        //printf("Right clock end\n");
+        usleep(100);
+    
+        // Left Clock 
+        if(-1==GPIOWrite(POUT_L_TRIG,1)){
+            printf("gpio Right write/trigger err\n");
+            exit(0);
+        }
+        usleep(10);
+        GPIOWrite(POUT_L_TRIG,0);       
+        while(GPIORead(PIN_L_ECHO) == 0){
+            es_count++;
+            if(es_count > MAXESCOUNT){
+                es_count = MAXEECOUNT;
+                break;
+            }
+            lstart_t=clock();
+        }
+        while(GPIORead(PIN_L_ECHO) == 1){
+            if(es_count == MAXEECOUNT){
+                es_count = 0;
+                break;
+            }
+            lend_t=clock();
+        }
+        //printf("Left clock end \n");
+        usleep(100);
 
-        snprintf(msg, sizeof(msg), "m%d%d", glpower, grpower);
+        //printf("start : %f\n",rstart_t);
+        //printf("end : %f\n",end_t);
+        //printf("end - start : %f\n",end_t-rstart_t);
+
+        ltime = (double)(lend_t-lstart_t)/CLOCKS_PER_SEC;
+        ldistance = ltime/2*34000;
+        rtime = (double)(rend_t-rstart_t)/CLOCKS_PER_SEC;
+        rdistance = rtime/2*34000;
+
+        customInsertQueue(ldistance, FLAG_L);
+        customInsertQueue(rdistance, FLAG_R);
+        
+        if(mr_distance <= 10 || ml_distance <= 10){
+            continue;
+        }
+
+        printf("ml_distance : %f, ",ml_distance);
+        if(ml_distance < 40 && ml_distance > 10){
+            lpower = 2;
+        }else if(ml_distance < 100 && ml_distance > 10){
+            lpower = 1;
+        }else{
+            lpower = 0;
+        }
+        printf("mr_distance : %f \n ",mr_distance);
+        if(mr_distance < 40 && mr_distance > 10){
+            rpower = 2;
+        }else if(mr_distance < 100 && mr_distance > 10){
+            rpower = 1;
+        }else{
+            rpower = 0;
+        }
+        
+        if(lpower != 0){
+            printf("lpower : %d, ",lpower);
+        }else{
+            printf("lpower : no change!!, ");
+        }
+        if(rpower != 0){
+            printf("rpower : %d \n ,",rpower);
+        }else{
+            printf("rpower : no change!! \n");
+        }
+        
+        usleep(90000);
+        snprintf(msg, sizeof(msg), "m%d%d", lpower, rpower);
         write(sock, msg, sizeof(msg));
         printf("msg = %s\n",msg);
-        usleep(500*1000);
+        printf("-----------------------------------\n");
+        usleep(200000);
     }
 
     close(sock);
@@ -416,6 +397,6 @@ int main(int argc, char *argv[]){
         return -1;
     }
 
-   return 0;
+	return 0;
     
 }

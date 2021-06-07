@@ -20,13 +20,15 @@
 #define LOW 0
 #define HIGH   1
 
-#define POUT_R_TRIG    8
-#define PIN_R_ECHO     7
-#define POUT_L_TRIG    23
-#define PIN_L_ECHO     24
+#define POUT_R_TRIG    23
+#define PIN_R_ECHO     24
+#define POUT_L_TRIG    8
+#define PIN_L_ECHO     7
 
 #define FLAG_R 1
 #define FLAG_L 2
+#define MAXESCOUNT 80
+#define MAXEECOUNT 81
 
 double qr_array[QUEUE_MAX] = {0,};
 double ql_array[QUEUE_MAX] = {0,};
@@ -166,8 +168,8 @@ static int GPIORead(int pin){
 void customInsertQueue(double qDist, int qLR)
 {
     if(qLR == FLAG_R){
-        if (rrear == QUEUE_MAX - 1){ // Right Queue is Full
-            printf("Right Queue is Full.\n");
+        if (rrear == QUEUE_MAX - 1){ // Queue is Full
+            //printf("Right Queue is Full \n ");
 
             // Bubble Sort
             int temp;
@@ -199,8 +201,8 @@ void customInsertQueue(double qDist, int qLR)
             qr_array[rrear] = qDist;
         }
     }else{  // Left Sensor
-        if (lrear == QUEUE_MAX - 1){ // Left Queue is Full
-            printf("Left Queue is Full.\n");
+        if (lrear == QUEUE_MAX - 1){ // Queue is Full
+            //printf("Left Queue is Full , ");
 
             // Bubble Sort
             int temp;
@@ -286,73 +288,74 @@ int main(int argc, char *argv[]){
     usleep(10000);
 
     while(1){
+        int es_count = 0;
+        // Right Clock 
         if(-1==GPIOWrite(POUT_R_TRIG,1)){
             printf("gpio Right write/trigger err\n");
             exit(0);
         }
-        printf("step1\n");
         usleep(10);
         GPIOWrite(POUT_R_TRIG,0);
-        usleep(10);
-        printf("step2\n");
-        //printf("------------------------------------\n");
         while(GPIORead(PIN_R_ECHO) == 0){
+            es_count++;
+            if(es_count > MAXESCOUNT){
+                es_count = MAXEECOUNT;
+                break;
+            }
             rstart_t=clock();
         }
-        printf("step3\n");
         while(GPIORead(PIN_R_ECHO) == 1){
+            if(es_count == MAXEECOUNT){
+                es_count = 0;
+                break;
+            }
             rend_t=clock();
         }
-        printf("step4\n");
-        usleep(10);
+        //printf("Right clock end\n");
+        usleep(100);
+    
+        // Left Clock 
         if(-1==GPIOWrite(POUT_L_TRIG,1)){
             printf("gpio Right write/trigger err\n");
             exit(0);
         }
-        printf("step5\n");
         usleep(10);
-        GPIOWrite(POUT_L_TRIG,0);
-        usleep(10);
-        printf("step6\n");
+        GPIOWrite(POUT_L_TRIG,0);       
         while(GPIORead(PIN_L_ECHO) == 0){
+            es_count++;
+            if(es_count > MAXESCOUNT){
+                es_count = MAXEECOUNT;
+                break;
+            }
             lstart_t=clock();
         }
-        printf("step7\n");
         while(GPIORead(PIN_L_ECHO) == 1){
+            if(es_count == MAXEECOUNT){
+                es_count = 0;
+                break;
+            }
             lend_t=clock();
         }
-        printf("step8\n");
+        //printf("Left clock end \n");
+        usleep(100);
 
         //printf("start : %f\n",rstart_t);
         //printf("end : %f\n",end_t);
         //printf("end - start : %f\n",end_t-rstart_t);
 
-        rtime = (double)(rend_t-rstart_t)/CLOCKS_PER_SEC;
-        rdistance = rtime/2*34000;
         ltime = (double)(lend_t-lstart_t)/CLOCKS_PER_SEC;
         ldistance = ltime/2*34000;
-        //printf("time = %.5lf, ", time);
-        //printf("rdistance = %.2lfcm\n",rdistance);
+        rtime = (double)(rend_t-rstart_t)/CLOCKS_PER_SEC;
+        rdistance = rtime/2*34000;
 
-        customInsertQueue(rdistance, FLAG_R);
         customInsertQueue(ldistance, FLAG_L);
-        if(mr_distance <= 10 && ml_distance <= 10){
+        customInsertQueue(rdistance, FLAG_R);
+        
+        if(mr_distance <= 10 || ml_distance <= 10){
             continue;
         }
-        printf("mr_distance : %f\n",mr_distance);
-        if(mr_distance < 40 && mr_distance > 10){
-            rpower = 2;
-        }else if(mr_distance < 100 && mr_distance > 10){
-            rpower = 1;
-        }else{
-            rpower = 0;
-        }
-        if(rpower != 0){
-            printf("rpower : %d\n",rpower);
-        }else{
-            printf("rpower : no change!! \n");
-        }
-        printf("ml_distance : %f\n",ml_distance);
+
+        printf("ml_distance : %f, ",ml_distance);
         if(ml_distance < 40 && ml_distance > 10){
             lpower = 2;
         }else if(ml_distance < 100 && ml_distance > 10){
@@ -360,16 +363,31 @@ int main(int argc, char *argv[]){
         }else{
             lpower = 0;
         }
-        if(lpower != 0){
-            printf("lpower : %d\n",lpower);
+        printf("mr_distance : %f \n ",mr_distance);
+        if(mr_distance < 40 && mr_distance > 10){
+            rpower = 2;
+        }else if(mr_distance < 100 && mr_distance > 10){
+            rpower = 1;
         }else{
-            printf("lpower : no change!! \n");
+            rpower = 0;
         }
-
-        usleep(10000); 
+        
+        if(lpower != 0){
+            printf("lpower : %d, ",lpower);
+        }else{
+            printf("lpower : no change!!, ");
+        }
+        if(rpower != 0){
+            printf("rpower : %d \n ,",rpower);
+        }else{
+            printf("rpower : no change!! \n");
+        }
+        
+        usleep(90000);
         snprintf(msg, sizeof(msg), "m%d%d", lpower, rpower);
         write(sock, msg, sizeof(msg));
         printf("msg = %s\n",msg);
+        printf("-----------------------------------\n");
         usleep(200000);
     }
 
