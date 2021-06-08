@@ -25,8 +25,11 @@
 
 #define FLAG_R 1
 #define FLAG_L 2
-#define MAXESCOUNT 80
-#define MAXEECOUNT 81
+#define MAXESCOUNT 55
+#define MAXEECOUNT 56
+
+#define LEVELTWO 30 
+#define LEVELONE 60
 
 double qr_array[QUEUE_MAX] = {0,};
 double ql_array[QUEUE_MAX] = {0,};
@@ -314,6 +317,7 @@ int main(){
         customInsertQueue(rdistance, FLAG_R);
         
         if(mr_distance <= 10 || ml_distance <= 10){
+            //printf("***EMERGENCY******EMERGENCY***EMERGENCY***\n");
             continue;
         }
 
@@ -321,9 +325,9 @@ int main(){
         vnl_distance = vpl_distance;
         vpl_distance = ml_distance;
         lspeed = vpl_distance - vnl_distance;
-        if(ml_distance < 40 && ml_distance > 10){
+        if(ml_distance < LEVELTWO && ml_distance > 10){
             lpower = 2;
-        }else if(ml_distance < 100 && ml_distance > 10){
+        }else if(ml_distance < LEVELONE && ml_distance > 10){
             lpower = 1;
             if(lspeed > 20 && first_speed != 1){
                 lpower = 2;
@@ -337,9 +341,9 @@ int main(){
         vnr_distance = vpr_distance;
         vpr_distance = mr_distance;
         rspeed = vpr_distance - vnr_distance;
-        if(mr_distance < 40 && mr_distance > 10){
+        if(mr_distance < LEVELTWO && mr_distance > 10){
             rpower = 2;
-        }else if(mr_distance < 120 && mr_distance > 10){
+        }else if(mr_distance < LEVELONE && mr_distance > 10){
             rpower = 1;
             if(rspeed > 20 && first_speed != 1){
                 rpower = 2;
@@ -364,7 +368,7 @@ int main(){
             first_speed++;
         }
         printf("-----------------------------------\n");
-        usleep(90000);
+        usleep(1000);
     }
 
     if(-1==GPIOUnexport(POUT_R_TRIG)||-1==GPIOUnexport(PIN_R_ECHO)||-1==GPIOUnexport(POUT_L_TRIG)||-1==GPIOUnexport(PIN_L_ECHO)){
